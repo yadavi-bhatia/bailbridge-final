@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Phase 4: Match Blocks
+
+    // User Profile
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.uid is string && data.uid.size() <= 128 &&
+               data.email is string && data.email.size() <= 256;
+      }
+      
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+    }
+
+    // Legal Cases
+    match /cases/{caseId} {
+      function isValidCase(data) {
+        return data.case_id is string && data.case_id.size() <= 128 &&
+               data.userId == request.auth.uid;
+      }
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(caseId) && isValidCase(incoming());
+      allow update: if isOwner(existing().userId) && isValidCase(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // Evidence
+    match /evidence/{evidenceId} {
+      function isValidEvidence(data) {
+        return data.caseId is string && data.caseId.size() <= 128 &&
+               data.userId == request.auth.uid;
+      }
+      
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(evidenceId) && isValidEvidence(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // Hearings
+    match /hearings/{hearingId} {
+      function isValidHearing(data) {
+        return data.caseId is string && data.caseId.size() <= 128 &&
+               data.userId == request.auth.uid;
+      }
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(hearingId) && isValidHearing(incoming());
+      allow update: if isOwner(existing().userId) && isValidHearing(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // Reminders
+    match /reminders/{reminderId} {
+      function isValidReminder(data) {
+        return data.text is string && data.text.size() <= 500 &&
+               data.userId == request.auth.uid;
+      }
+
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(reminderId) && isValidReminder(incoming());
+      allow update: if isOwner(existing().userId) && isValidReminder(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+  }
+}

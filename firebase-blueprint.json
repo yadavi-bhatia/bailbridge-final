@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Case": {
+      "title": "Case",
+      "description": "Legal case details for a prisoner",
+      "type": "object",
+      "properties": {
+        "case_id": { "type": "string" },
+        "userId": { "type": "string" },
+        "description": { "type": "string" },
+        "classification": { "type": "object" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["case_id", "userId", "status"]
+    },
+    "Hearing": {
+      "title": "Hearing",
+      "description": "Scheduled court hearings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "caseId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" },
+        "title": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "userId", "caseId"]
+    },
+    "Evidence": {
+      "title": "Evidence",
+      "description": "Uploaded evidence documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "caseId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileType": { "type": "string" },
+        "hash": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "url": { "type": "string" }
+      },
+      "required": ["id", "userId", "caseId"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "User set reminders",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "text"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "Global user collection" },
+    "cases": { "schema": "Case", "description": "Legal cases" },
+    "hearings": { "schema": "Hearing", "description": "Hearing data" },
+    "evidence": { "schema": "Evidence", "description": "Evidence records" },
+    "reminders": { "schema": "Reminder", "description": "User reminders" }
+  }
+}

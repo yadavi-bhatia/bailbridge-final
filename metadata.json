@@ -1,0 +1,14 @@
+{
+  "name": "Remix: BailBridge / Namma Nyaya Agent",
+  "description": "Multilingual AI legal platform for undertake prisoners in India, providing bail assistance, document generation, and legal guidance.",
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "AI Legal Assistance",
+    "Multilingual Support",
+    "Document Generation",
+    "Evidence Management"
+  ]
+}
