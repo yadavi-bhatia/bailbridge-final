@@ -48,6 +48,9 @@ Integrated with:
 * Gemini AI
 * Firebase
 
+Built using Gemini, Firebase, Google Cloud Run, and a grounded RAG pipeline based on BNS and BNSS legal texts, BailBridge combines AI, legal accessibility, and procedural support inside one platform.
+
+
 ---
 
 ## 🚀 Run Locally
