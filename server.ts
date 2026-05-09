@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import path from "node:path";
 import { createServer as createViteServer } from "vite";
@@ -57,6 +58,22 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: "Failed to save reminder" });
     }
+  });
+
+  app.get("/api/ecourts/status/:cnr", (req, res) => {
+    const cnr = req.params.cnr;
+    // Simulate eCourts API fetch delay
+    setTimeout(() => {
+      res.json({
+        id: `ecourt-${Date.now()}`,
+        date: new Date(Date.now() + 86400000 * Math.floor(Math.random() * 30 + 1)).toISOString().split('T')[0],
+        room: `Court Room ${Math.floor(Math.random() * 10 + 1)}`,
+        judge: "Hon'ble Magistrate (eCourts Sync)",
+        caseNumber: cnr,
+        status: "Active",
+        type: "Hearing (eCourts Extracted)"
+      });
+    }, 1500);
   });
 
   // Mock e-Courts API Data (Existing)

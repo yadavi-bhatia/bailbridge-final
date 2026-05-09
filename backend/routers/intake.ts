@@ -1,16 +1,5 @@
-import { Router } from "express";
-import { v4 as uuidv4 } from "uuid";
-import { classifyIncident } from "../services/classification.ts";
-import { evaluateEthics } from "../services/ethics.ts";
-import { buildLegalAid, buildChecklist } from "../services/legal_aid.ts";
-import { getMockHearing } from "../services/hearing.ts";
-import { buildScripts } from "../services/script.ts";
-import { generateChatResponse } from "../services/gemini.ts";
-
-const router = Router();
-
 import express from 'express';
-import { generateLegalResponse } from '../services/gemini';
+import { generateLegalResponse } from '../services/gemini.ts';
 
 const router = express.Router();
 
@@ -65,7 +54,7 @@ CURRENT STAGE:
 ${stage || 'intake'}
 
 CONVERSATION ID:
-${conversation_id}
+${conversation_id || 'new-session'}
 
 PREVIOUS CONVERSATION:
 ${formattedHistory}
@@ -75,7 +64,7 @@ ${input_text}
 
 IMPORTANT:
 - Continue conversation naturally
-- NEVER restart
+- NEVER restart intake
 - Ask only ONE relevant next question
 - If enough info exists:
   - explain bail situation
@@ -83,7 +72,12 @@ IMPORTANT:
   - generate checklist
 `;
 
-    const aiResponse = await generateLegalResponse(finalPrompt);
+    const aiResponse = await generateLegalResponse({
+      input_text: finalPrompt,
+      conversation_history: [],
+      stage: stage || 'intake',
+      language: language || 'en'
+    });
 
     return res.json({
       success: true,
@@ -107,7 +101,8 @@ IMPORTANT:
 
       bail_eligibility_score: 55,
 
-      conversation_id,
+      conversation_id:
+        conversation_id || `case_${Date.now()}`,
     });
   } catch (error) {
     console.error('INTAKE ERROR:', error);
@@ -118,7 +113,5 @@ IMPORTANT:
     });
   }
 });
-
-export default router;
 
 export default router;

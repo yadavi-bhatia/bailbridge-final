@@ -16,7 +16,9 @@ import {
   ShieldCheck,
   Zap,
   Activity,
-  Files
+  Files,
+  Menu,
+  MessageSquarePlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,7 +80,27 @@ interface ExtractData {
   bail_score?: number;
 }
 
+interface SavedChat {
+  id: string;
+  title: string;
+  preview: string;
+  updatedAt: string;
+  messages: Message[];
+  legalStatus: any;
+  caseStage: string;
+}
+
 export default function ChatAgent() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [savedChats, setSavedChats] = useState<SavedChat[]>(() => {
+    try {
+      const saved = localStorage.getItem('bailbridge_saved_chats');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error('Failed to parse saved chats', e);
+    }
+    return [];
+  });
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -224,115 +246,230 @@ const [caseStage, setCaseStage] = useState<string>('intake');
     }
   };
 
- const resetChat = () => {
-  const newId = crypto.randomUUID();
-
-  localStorage.setItem('bailbridge_conversation_id', newId);
-
-  setConversationId(newId);
-  setCaseStage('intake');
-
-  setMessages([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Welcome, I am Aruna, your Namma Nyaya Agent. How can I assist you today? You can tell me about your situation or upload the FIR and I can help you.',
-      type: 'standard',
-      timestamp: new Date(),
-    }
-  ]);
-
-  setLegalStatus({
-    offence: 'Analyzing...',
-    bailable: 'Pending',
-    guaranteeViolation: false,
-    bailScore: 0,
-    stage: 1
-  });
-
-  setInput('');
-};
-
- const handleSend = async () => {
-
-    if (intakeData.stage) {
-      setCaseStage(intakeData.stage);
-    }
-
-    localStorage.setItem(
-      'bailbridge_case_data',
-      JSON.stringify({
-        classification: intakeData.classification,
-        script: intakeData.script,
-        checklist: intakeData.checklist,
-        legal_aid: intakeData.legal_aid,
-        bail_score: intakeData.bail_eligibility_score,
-        conversation_id: conversationId,
-        stage: intakeData.stage,
-      })
-    );
-
-    if (intakeData.classification) {
-      setLegalStatus({
-        offence: `${
-          intakeData.classification.offence_name || 'Unknown Offence'
-        } (${intakeData.classification.bns_code || 'N/A'})`,
-
-        bailable: intakeData.classification.bailable
-          ? 'Bailable'
-          : 'Non-Bailable',
-
-        guaranteeViolation: intakeData.ethics?.blocked || false,
-
-        bailScore: intakeData.bail_eligibility_score || 0,
-
-        stage:
-          intakeData.bail_eligibility_score > 70
-            ? 4
-            : intakeData.bail_eligibility_score > 50
-            ? 3
-            : intakeData.bail_eligibility_score > 25
-            ? 2
-            : 1,
-      });
-    }
-
-    fetch('/api/cases', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        case_id: intakeData.case_id || conversationId,
-        conversation_id: conversationId,
-        description: currentInput,
-        conversation_history: updatedMessages,
-        classification: intakeData.classification,
-        status: 'active',
-      }),
-    }).catch((err) => {
-      console.error('Persistence error:', err);
+  const resetChat = () => {
+    const newId = crypto.randomUUID();
+    localStorage.setItem('bailbridge_conversation_id', newId);
+    setConversationId(newId);
+    setCaseStage('intake');
+    setMessages([
+      {
+        id: '1',
+        role: 'assistant',
+        content: 'Welcome, I am Aruna, your Namma Nyaya Agent. How can I assist you today? You can tell me about your situation or upload the FIR and I can help you.',
+        type: 'standard',
+        timestamp: new Date(),
+      }
+    ]);
+    setLegalStatus({
+      offence: 'Analyzing...',
+      bailable: 'Pending',
+      guaranteeViolation: false,
+      bailScore: 0,
+      stage: 1
     });
-  } catch (error) {
-    console.error('Chat Error:', error);
+    setInput('');
+    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+  };
 
-    const errorMsg: Message = {
-      id: (Date.now() + 2).toString(),
-      role: 'assistant',
-      content:
-        'The Nyaya network could not continue the intake workflow. Please check whether your backend is running properly on FastAPI and whether /api/process_intake exists.',
-      type: 'alert',
+  const loadChat = (chatId: string) => {
+    const chat = savedChats.find(c => c.id === chatId);
+    if (chat) {
+      setConversationId(chat.id);
+      localStorage.setItem('bailbridge_conversation_id', chat.id);
+      setCaseStage(chat.caseStage);
+      setMessages(chat.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+      setLegalStatus(chat.legalStatus);
+      setInput('');
+      if (window.innerWidth < 1024) setIsSidebarOpen(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const currentInput = input;
+    setInput('');
+    setIsLoading(true);
+
+    const newUserMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: currentInput,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, errorMsg]);
-  } finally {
-    setIsLoading(false);
-  }
-};
+    const updatedMessages = [...messages, newUserMsg];
+    setMessages(updatedMessages);
+
+    try {
+      const res = await fetch('/api/process_intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input_text: currentInput,
+          language: 'auto',
+          conversation_history: updatedMessages,
+          conversation_id: conversationId,
+          stage: caseStage,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch from intake API');
+
+      const intakeData = await res.json();
+
+      const newAssistantMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: intakeData.ai_response || 'Error processing response',
+        type: 'standard',
+        timestamp: new Date(),
+      };
+
+      const finalMessages = [...updatedMessages, newAssistantMsg];
+      setMessages(finalMessages);
+
+      let newStage = caseStage;
+      if (intakeData.stage) {
+        setCaseStage(intakeData.stage);
+        newStage = intakeData.stage;
+      }
+
+      let newLegalStatus = { ...legalStatus };
+      if (intakeData.classification) {
+        newLegalStatus = {
+          offence: `${
+            intakeData.classification.offence_name || 'Unknown Offence'
+          } (${intakeData.classification.bns_code || 'N/A'})`,
+
+          bailable: intakeData.classification.bailable
+            ? 'Bailable'
+            : 'Non-Bailable',
+
+          guaranteeViolation: intakeData.ethics?.blocked || false,
+
+          bailScore: intakeData.bail_eligibility_score || 0,
+
+          stage:
+            intakeData.bail_eligibility_score > 70
+              ? 4
+              : intakeData.bail_eligibility_score > 50
+              ? 3
+              : intakeData.bail_eligibility_score > 25
+              ? 2
+              : 1,
+        };
+        setLegalStatus(newLegalStatus);
+      }
+
+      setSavedChats(prev => {
+        const updated = [...prev];
+        const existingIdx = updated.findIndex(c => c.id === conversationId);
+        const title = existingIdx >= 0 && updated[existingIdx].title !== 'New Chat' 
+          ? updated[existingIdx].title 
+          : currentInput.substring(0, 40) + '...';
+
+        const chatData: SavedChat = {
+          id: conversationId,
+          title,
+          preview: newAssistantMsg.content.substring(0, 60) + '...',
+          updatedAt: new Date().toISOString(),
+          messages: finalMessages,
+          legalStatus: newLegalStatus,
+          caseStage: newStage
+        };
+
+        if (existingIdx >= 0) {
+          updated[existingIdx] = chatData;
+        } else {
+          updated.unshift(chatData);
+        }
+        localStorage.setItem('bailbridge_saved_chats', JSON.stringify(updated));
+        return updated;
+      });
+
+      localStorage.setItem(
+        'bailbridge_case_data',
+        JSON.stringify({
+          classification: intakeData.classification,
+          script: intakeData.script,
+          checklist: intakeData.checklist,
+          legal_aid: intakeData.legal_aid,
+          bail_score: intakeData.bail_eligibility_score,
+          conversation_id: conversationId,
+          stage: intakeData.stage,
+        })
+      );
+
+      fetch('/api/cases', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          case_id: intakeData.case_id || conversationId,
+          conversation_id: conversationId,
+          description: currentInput,
+          conversation_history: finalMessages,
+          classification: intakeData.classification,
+          status: 'active',
+        }),
+      }).catch((err) => {
+        console.error('Persistence error:', err);
+      });
+    } catch (error) {
+      console.error('Chat Error:', error);
+
+      const errorMsg: Message = {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        content:
+          'The Nyaya network could not continue the intake workflow. Please check whether your backend is running properly on FastAPI and whether /api/process_intake exists.',
+        type: 'alert',
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="max-w-7xl mx-auto h-[calc(100vh-120px)] flex flex-col md:flex-row gap-6 px-4">
+    <div className="max-w-7xl mx-auto h-[calc(100vh-120px)] flex flex-col md:flex-row gap-6 px-4 relative overflow-hidden">
+      {/* Left Sidebar - Chat History */}
+      <div className={`absolute md:relative z-40 bg-slate-950 md:bg-transparent h-full transition-transform duration-300 w-72 shrink-0 flex flex-col gap-4 border-r border-white/5 pr-4 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} `}>
+        <div className="flex items-center justify-between mt-2">
+          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-widest">Conversations</h2>
+          <Button variant="ghost" size="icon" className="md:hidden text-slate-400" onClick={() => setIsSidebarOpen(false)}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <Button onClick={resetChat} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 font-bold shadow-lg shadow-blue-900/20">
+          <MessageSquarePlus className="w-4 h-4" /> New Chat
+        </Button>
+
+        <ScrollArea className="flex-1 -mx-2 px-2">
+          <div className="space-y-2 pb-4">
+            {savedChats.length === 0 && (
+              <p className="text-xs text-slate-500 text-center mt-10">No recent conversations.</p>
+            )}
+            {savedChats.map(chat => (
+              <button 
+                key={chat.id}
+                onClick={() => loadChat(chat.id)}
+                className={`w-full text-left p-3 rounded-xl transition-all block ${chat.id === conversationId ? 'bg-blue-500/10 border border-blue-500/30 shadow-sm' : 'hover:bg-white/5 border border-transparent'}`}
+              >
+                <div className="text-xs font-bold text-slate-200 truncate mb-1">{chat.title}</div>
+                <div className="text-[10px] text-slate-400 truncate mb-2">{chat.preview}</div>
+                <div className="text-[9px] text-slate-600 font-mono">{new Date(chat.updatedAt).toLocaleDateString()} {new Date(chat.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+
       {/* Sidebar - Case Insight (Crafted UI) */}
       <div className="hidden lg:flex flex-col w-80 shrink-0 gap-4 overflow-y-auto pr-2">
         <SpotlightCard className="p-6 border-cyan-500/20 bg-cyan-500/5">
@@ -403,6 +540,9 @@ const [caseStage, setCaseStage] = useState<string>('intake');
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex items-center justify-between mb-4 glass p-4 px-6 rounded-xl border-white/5 bg-slate-900/60 shadow-sm">
           <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" className="md:hidden text-slate-400 -ml-2" onClick={() => setIsSidebarOpen(true)}>
+              <Menu className="w-5 h-5" />
+            </Button>
             <div className="w-10 h-10 rounded-lg bg-blue-600/10 flex items-center justify-center text-blue-400 border border-blue-600/20 shadow-sm">
               <Scale className="w-5 h-5" />
             </div>

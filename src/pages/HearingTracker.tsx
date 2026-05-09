@@ -34,6 +34,41 @@ export default function HearingTracker() {
   const navigate = useNavigate();
   const [hearings, setHearings] = useState<Hearing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [cnrInput, setCnrInput] = useState('');
+  const [isCheckingCnr, setIsCheckingCnr] = useState(false);
+
+  const handleCheckStatus = async (overrideCnr?: string) => {
+    const targetCnr = overrideCnr || cnrInput;
+    if (!targetCnr.trim() || targetCnr.length < 10) {
+      alert("Please enter a valid CNR number (minimum 10 characters).");
+      return;
+    }
+    setIsCheckingCnr(true);
+    try {
+      const res = await fetch(`/api/ecourts/status/${targetCnr}`);
+      if (!res.ok) throw new Error("Failed to fetch from eCourts");
+      const data = await res.json();
+      
+      const newHearing: Hearing = {
+        id: data.id,
+        date: data.date,
+        room: data.room,
+        judge: data.judge,
+        caseNumber: data.caseNumber,
+        status: data.status,
+        type: data.type
+      };
+      
+      setHearings(prev => [newHearing, ...prev]);
+      if (!overrideCnr) setCnrInput('');
+      alert(`eCourts Sync Complete: Case ${data.caseNumber} is scheduled for ${data.date}.`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to pull status from eCourts. Please try again later.");
+    } finally {
+      setIsCheckingCnr(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/hearings')
@@ -74,7 +109,7 @@ export default function HearingTracker() {
             className="border-white/10 hover:bg-white/5 text-slate-300 rounded-lg h-12 px-6 font-bold uppercase tracking-widest text-[10px]"
             onClick={() => {
               const cnr = prompt("Enter CNR Number for Status Inquiry:");
-              if (cnr) alert(`Checking status for ${cnr}... Current Status: PENDING HEARING`);
+              if (cnr) handleCheckStatus(cnr);
             }}
           >
             <Search className="w-4 h-4 mr-2" />
@@ -106,9 +141,16 @@ export default function HearingTracker() {
           <Input 
             placeholder="Enter 16-character CNR Number..." 
             className="bg-black/20 border-white/10 h-12 text-xs font-mono tracking-tighter"
+            value={cnrInput}
+            onChange={(e) => setCnrInput(e.target.value)}
+            onKeyDown={(e) => { if(e.key === 'Enter') handleCheckStatus(); }}
           />
-          <Button className="h-12 bg-white text-slate-950 font-black text-[9px] uppercase tracking-widest px-6 hover:bg-slate-200">
-            Check Status
+          <Button 
+            className="h-12 bg-white text-slate-950 font-black text-[9px] uppercase tracking-widest px-6 hover:bg-slate-200 disabled:opacity-50"
+            onClick={() => handleCheckStatus()}
+            disabled={isCheckingCnr}
+          >
+            {isCheckingCnr ? 'Pulling...' : 'Check Status'}
           </Button>
         </SpotlightCard>
       </div>
